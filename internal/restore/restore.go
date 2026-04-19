@@ -1,11 +1,14 @@
 package restore
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 )
 
 func canonical(p string) string {
@@ -35,19 +38,76 @@ func rsyncExcludeArgs(excludes []string) []string {
 	return args
 }
 
+// SpeedFormatter converts bytes to human-readable speed
+func formatSpeed(bytes int64) string {
+	const (
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
+	)
+	switch {
+	case bytes >= gb:
+		return fmt.Sprintf("%.2f GB/s", float64(bytes)/float64(gb))
+	case bytes >= mb:
+		return fmt.Sprintf("%.2f MB/s", float64(bytes)/float64(mb))
+	case bytes >= kb:
+		return fmt.Sprintf("%.2f KB/s", float64(bytes)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B/s", bytes)
+	}
+}
+
 func runRsync(src, dst string, excludes []string, delete bool) error {
 	args := []string{"-aH", "--numeric-ids"}
 	if delete {
 		args = append(args, "--delete")
 	}
+	// Optimizations for initial capture:
+	// --whole-file: disable delta algorithm (faster for local copies)
+	// --info=progress2: show aggregate progress with speed
+	args = append(args, "--whole-file", "--info=progress2")
 	args = append(args, rsyncExcludeArgs(excludes)...)
 	args = append(args, src, dst)
 
 	cmd := exec.Command("rsync", args...)
-	output, err := cmd.CombinedOutput()
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("rsync failed: %w (%s)", err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("stderr pipe: %w", err)
 	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("rsync start: %w", err)
+	}
+
+	scanner := bufio.NewScanner(stderr)
+	spinner := []string{"|", "/", "-", "\\"}
+	spinIdx := 0
+	speedRegex := regexp.MustCompile(`(\d+\.\d+)([KMG])B/s`)
+	lastSpeed := ""
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	go func() {
+		for range ticker.C {
+			fmt.Fprintf(os.Stderr, "\r\033[2K[CAP] Capturing baseline %s %s", spinner[spinIdx%len(spinner)], lastSpeed)
+			spinIdx++
+		}
+	}()
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if matches := speedRegex.FindStringSubmatch(line); len(matches) > 0 {
+			lastSpeed = matches[1] + matches[2] + "B/s"
+		}
+	}
+
+	ticker.Stop()
+	fmt.Fprintf(os.Stderr, "\r\033[2K")
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("rsync failed: %w", err)
+	}
+
 	return nil
 }
 

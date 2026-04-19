@@ -33,6 +33,10 @@ fi
 
 cd "$REPO_ROOT"
 
+GO_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/nivenia-go-build"
+mkdir -p "$GO_CACHE_DIR"
+export GOCACHE="$GO_CACHE_DIR"
+
 UPDATE_SCRIPT_SOURCE="scripts/update.sh"
 if [[ ! -f "$UPDATE_SCRIPT_SOURCE" ]]; then
   UPDATE_SCRIPT_SOURCE="update.sh"

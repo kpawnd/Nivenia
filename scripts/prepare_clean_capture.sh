@@ -22,6 +22,24 @@ clear_path() {
   fi
 }
 
+clear_dir_contents() {
+  local path="$1"
+  if [[ -d "$path" ]]; then
+    find "$path" -mindepth 1 -maxdepth 1 -exec rm -rf {} + >/dev/null 2>&1 || true
+  fi
+}
+
+ensure_owned_dir() {
+  local user="$1"
+  local path="$2"
+  local group=""
+
+  group="$(id -gn "$user" 2>/dev/null || echo staff)"
+  mkdir -p "$path" >/dev/null 2>&1 || true
+  chown "$user:$group" "$path" >/dev/null 2>&1 || true
+  chmod 700 "$path" >/dev/null 2>&1 || true
+}
+
 list_real_users() {
   while read -r name uid; do
     if [[ "$uid" =~ ^[0-9]+$ ]] && (( uid >= 500 )) && [[ "$name" != "nobody" ]]; then
@@ -45,7 +63,8 @@ user_home() {
 }
 
 sanitize_user_home() {
-  local home="$1"
+  local user="$1"
+  local home="$2"
 
   clear_path "$home/Library/Safari"
   clear_path "$home/Library/WebKit/com.apple.Safari"
@@ -77,8 +96,8 @@ sanitize_user_home() {
 
   clear_path "$home/Library/Application Support/Firefox/Profiles"
 
-  clear_path "$home/Library/Caches"
-  mkdir -p "$home/Library/Caches" >/dev/null 2>&1 || true
+  ensure_owned_dir "$user" "$home/Library/Caches"
+  clear_dir_contents "$home/Library/Caches"
 }
 
 log "stopping browsers and user cache writers"
@@ -94,11 +113,13 @@ while IFS= read -r user; do
     continue
   fi
   log "sanitizing user data for $user"
-  sanitize_user_home "$home"
+  sanitize_user_home "$user" "$home"
 done < <(list_real_users)
 
 log "sanitizing system caches"
 clear_path "/Library/Caches"
 mkdir -p "/Library/Caches" >/dev/null 2>&1 || true
+chown root:wheel "/Library/Caches" >/dev/null 2>&1 || true
+chmod 755 "/Library/Caches" >/dev/null 2>&1 || true
 
 log "pre-capture cleanup complete"

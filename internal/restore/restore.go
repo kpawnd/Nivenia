@@ -87,6 +87,8 @@ func runRsync(src, dst string, excludes []string, delete bool) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
+	var errorLines []string
+
 	go func() {
 		for range ticker.C {
 			fmt.Fprintf(os.Stderr, "\r\033[2K[CAP] Capturing baseline %s %s", spinner[spinIdx%len(spinner)], lastSpeed)
@@ -98,6 +100,9 @@ func runRsync(src, dst string, excludes []string, delete bool) error {
 		line := scanner.Text()
 		if matches := speedRegex.FindStringSubmatch(line); len(matches) > 0 {
 			lastSpeed = matches[1] + matches[2] + "B/s"
+		} else if strings.TrimSpace(line) != "" && !strings.Contains(line, "to-check") && !strings.Contains(line, "sent") && !strings.Contains(line, "total") {
+			// Capture non-progress error lines
+			errorLines = append(errorLines, line)
 		}
 	}
 
@@ -105,7 +110,11 @@ func runRsync(src, dst string, excludes []string, delete bool) error {
 	fmt.Fprintf(os.Stderr, "\r\033[2K")
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("rsync failed: %w", err)
+		errMsg := fmt.Sprintf("rsync failed: %w", err)
+		if len(errorLines) > 0 {
+			errMsg += "\nrsync errors:\n" + strings.Join(errorLines, "\n")
+		}
+		return fmt.Errorf(errMsg)
 	}
 
 	return nil

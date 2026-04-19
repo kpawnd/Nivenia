@@ -147,6 +147,13 @@ func runRsync(src, dst string, excludes []string, delete bool) error {
 	fmt.Fprintf(os.Stderr, "\r\033[2K")
 
 	if err := cmd.Wait(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 24 {
+				fmt.Fprintln(os.Stderr, "[CAP] rsync reported vanished files (exit 24) on live filesystem; continuing")
+				return nil
+			}
+		}
+
 		// Build detailed error message with rsync arguments for debugging
 		errMsg := fmt.Sprintf("rsync failed: %v\ncommand: rsync %s", err, strings.Join(args, " "))
 		if len(errorLines) > 0 {

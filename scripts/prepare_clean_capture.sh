@@ -23,11 +23,25 @@ clear_path() {
 }
 
 list_real_users() {
-  dscl . -list /Users UniqueID | while read -r name uid; do
+  while read -r name uid; do
     if [[ "$uid" =~ ^[0-9]+$ ]] && (( uid >= 500 )) && [[ "$name" != "nobody" ]]; then
       echo "$name"
     fi
-  done
+  done < <(dscl . -list /Users UniqueID 2>/dev/null || true)
+}
+
+user_home() {
+  local user="$1"
+  local home=""
+
+  home="$(dscl . -read "/Users/$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}' | head -n 1 || true)"
+  if [[ -z "$home" ]]; then
+    home="/Users/$user"
+  fi
+
+  if [[ -d "$home" ]]; then
+    echo "$home"
+  fi
 }
 
 sanitize_user_home() {
@@ -74,14 +88,14 @@ kill_if_running "Microsoft Edge"
 kill_if_running "firefox"
 kill_if_running "cfprefsd"
 
-for user in $(list_real_users); do
-  home="$(dscl . -read /Users/"$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+while IFS= read -r user; do
+  home="$(user_home "$user")"
   if [[ -z "$home" || ! -d "$home" ]]; then
     continue
   fi
   log "sanitizing user data for $user"
   sanitize_user_home "$home"
-done
+done < <(list_real_users)
 
 log "sanitizing system caches"
 clear_path "/Library/Caches"

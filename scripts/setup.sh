@@ -68,7 +68,9 @@ sudo install -m 644 launchd/com.nivenia.updater.plist "$UPDATER_DAEMON_PATH"
 
 if [[ "${NIVENIA_SKIP_PRECAPTURE_CLEAN:-0}" != "1" ]]; then
   echo "clearing user session/cache data before capture..."
-  sudo /usr/local/bin/nivenia-prepare-clean-capture
+  if ! sudo /usr/local/bin/nivenia-prepare-clean-capture; then
+    echo "warning: pre-capture cleanup failed; continuing with capture" >&2
+  fi
 else
   echo "skipping pre-capture cleanup (NIVENIA_SKIP_PRECAPTURE_CLEAN=1)"
 fi

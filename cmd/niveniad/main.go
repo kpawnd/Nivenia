@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"nivenia/internal/config"
 	"nivenia/internal/engine"
@@ -18,6 +19,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "niveniad: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Wait for system to finish booting before attempting restore
+	// This prevents interference with kernel extension initialization
+	time.Sleep(30 * time.Second)
 
 	p, err := config.Load(*policyPath)
 	if err != nil {

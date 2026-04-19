@@ -11,7 +11,9 @@
     <string>/etc/nivenia/policy.json</string>
   </array>
   <key>RunAtLoad</key>
-  <true/>
+  <false/>
+  <key>StartInterval</key>
+  <integer>120</integer>
   <key>StandardOutPath</key>
   <string>/var/log/niveniad.out.log</string>
   <key>StandardErrorPath</key>

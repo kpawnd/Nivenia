@@ -79,7 +79,7 @@ Key fields:
 
 Restore behavior:
 
-- boot restore waits for system readiness before running
+- boot restore waits only for the managed Data volume to be available, so it can run before loginwindow and session restore
 - restore daemon runs once at boot (not continuously during uptime)
 - strict default restore uses delete pass so newly-created files are removed on reboot
 - optional safe mode: set `NIVENIA_SAFE_SYNC_ONLY=1` to disable delete pass

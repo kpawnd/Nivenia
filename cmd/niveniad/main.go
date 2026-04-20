@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"time"
 
 	"nivenia/internal/config"
@@ -12,16 +11,14 @@ import (
 	"nivenia/internal/platform"
 )
 
-func waitForBootReadiness() {
-	// Keep this conservative: small fixed wait, then probe for loginwindow.
-	time.Sleep(20 * time.Second)
-
+func waitForDataVolume() {
+	// Run as early as possible, but wait for the managed data volume to be mounted.
 	deadline := time.Now().Add(5 * time.Minute)
 	for time.Now().Before(deadline) {
-		if exec.Command("pgrep", "-x", "loginwindow").Run() == nil {
+		if _, err := os.Stat("/System/Volumes/Data"); err == nil {
 			return
 		}
-		time.Sleep(5 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -34,7 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	waitForBootReadiness()
+	waitForDataVolume()
 
 	p, err := config.Load(*policyPath)
 	if err != nil {

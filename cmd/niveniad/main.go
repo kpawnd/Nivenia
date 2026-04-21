@@ -54,6 +54,7 @@ func waitForLoginWindow() error {
 
 func main() {
 	policyPath := flag.String("policy", "/etc/nivenia/policy.json", "policy file path")
+	requireLoginWindow := flag.Bool("require-loginwindow", false, "abort if an interactive user is at the console (set in plist for boot-time use)")
 	flag.Parse()
 
 	if err := platform.EnsureSupportedMacOS(); err != nil {
@@ -71,9 +72,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "niveniad preboot check failed: %v\n", err)
 		os.Exit(1)
 	}
-	if err := waitForLoginWindow(); err != nil {
-		fmt.Fprintf(os.Stderr, "niveniad preboot check failed: %v\n", err)
-		os.Exit(1)
+	if *requireLoginWindow {
+		if err := waitForLoginWindow(); err != nil {
+			fmt.Fprintf(os.Stderr, "niveniad preboot check failed: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	e := engine.New(p)

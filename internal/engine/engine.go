@@ -118,7 +118,7 @@ func (e Engine) RunBootRestore() error {
 
 	_ = os.WriteFile(marker, []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
 
-	if err := restore.RestoreFromBaseline(e.Policy.BaselineRoot, e.Policy.ManagedRoot, e.Policy.ExcludePaths); err != nil {
+	if err := restore.RestoreFromBaselineWithMode(e.Policy.BaselineRoot, e.Policy.ManagedRoot, e.Policy.ExcludePaths, e.Policy.RestoreMode); err != nil {
 		s.FailureCount++
 		s.LastRestoreOK = false
 		s.LastMessage = fmt.Sprintf("restore failed (%d/%d): %v", s.FailureCount, maxConsecutiveRestoreFailures, err)

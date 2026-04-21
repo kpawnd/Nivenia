@@ -10,6 +10,7 @@ type Policy struct {
 	ManagedRoot  string   `json:"managed_root"`
 	BaselineRoot string   `json:"baseline_root"`
 	ExcludePaths []string `json:"exclude_paths"`
+	RestoreMode  string   `json:"restore_mode"`
 	StateFile    string   `json:"state_file"`
 	LogFile      string   `json:"log_file"`
 }
@@ -45,6 +46,8 @@ func Load(path string) (Policy, error) {
 			"/private/var/db/KerberosKDC",
 			"/private/var/protected",
 			"/private/etc/fstab",
+			"/private/etc/sudoers",
+			"/private/etc/sudoers.d",
 			"/Library/Caches",
 			"/Library/Frameworks",
 			"/Library/SystemExtensions",
@@ -52,6 +55,9 @@ func Load(path string) (Policy, error) {
 			"/Volumes",
 			"/dev",
 		}
+	}
+	if p.RestoreMode == "" {
+		p.RestoreMode = "rsync"
 	}
 	if p.StateFile == "" {
 		p.StateFile = "/var/lib/nivenia/state.json"

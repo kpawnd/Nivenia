@@ -16,6 +16,8 @@
     "/private/var/db/KerberosKDC",
     "/private/var/protected",
     "/private/etc/fstab",
+    "/private/etc/sudoers",
+    "/private/etc/sudoers.d",
     "/Library/Caches",
     "/Library/Frameworks",
     "/Library/SystemExtensions",
@@ -23,6 +25,7 @@
     "/Volumes",
     "/dev"
   ],
+  "restore_mode": "rsync",
   "state_file": "/var/lib/nivenia/state.json",
   "log_file": "/var/log/nivenia.log"
 }

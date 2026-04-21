@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	RestoreModeRsync    = "rsync"
+	RestoreModeSnapshot = "snapshot"
+)
+
 func canonical(p string) string {
 	cleaned := filepath.Clean(p)
 	if cleaned == "." {
@@ -165,6 +170,89 @@ func runRsync(src, dst string, excludes []string, delete bool) error {
 	return nil
 }
 
+func effectiveRestoreMode(mode string) string {
+	if env := strings.TrimSpace(os.Getenv("NIVENIA_RESTORE_MODE")); env != "" {
+		mode = env
+	}
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		return RestoreModeRsync
+	}
+	return mode
+}
+
+func snapshotName() string {
+	if env := strings.TrimSpace(os.Getenv("NIVENIA_SNAPSHOT_NAME")); env != "" {
+		return env
+	}
+	return "nivenia-baseline"
+}
+
+func snapshotVolume(managedRoot string) string {
+	if env := strings.TrimSpace(os.Getenv("NIVENIA_SNAPSHOT_VOLUME")); env != "" {
+		return env
+	}
+	return managedRoot
+}
+
+func runDiskutil(args ...string) (string, error) {
+	cmd := exec.Command("diskutil", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("diskutil %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
+func listAPFSSnapshotNames(volume string) ([]string, error) {
+	out, err := runDiskutil("apfs", "listSnapshots", volume)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(out, "\n")
+	var names []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Name:") {
+			name := strings.TrimSpace(strings.TrimPrefix(line, "Name:"))
+			if name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	return names, nil
+}
+
+func deleteAPFSSnapshot(volume, name string) error {
+	_, err := runDiskutil("apfs", "deleteSnapshot", volume, "-name", name)
+	return err
+}
+
+func createAPFSSnapshot(volume, name string) error {
+	if name == "" {
+		return fmt.Errorf("snapshot name is empty")
+	}
+	// Remove any existing snapshot with the same name to keep a single baseline.
+	if names, err := listAPFSSnapshotNames(volume); err == nil {
+		for _, existing := range names {
+			if existing == name {
+				_ = deleteAPFSSnapshot(volume, name)
+				break
+			}
+		}
+	}
+	_, err := runDiskutil("apfs", "snapshot", volume, "-name", name)
+	return err
+}
+
+func revertAPFSSnapshot(volume, name string) error {
+	if name == "" {
+		return fmt.Errorf("snapshot name is empty")
+	}
+	_, err := runDiskutil("apfs", "revertToSnapshot", volume, "-name", name)
+	return err
+}
+
 func CaptureBaseline(managedRoot, baselineRoot string, excludes []string) error {
 	src := canonical(managedRoot)
 	dst := canonical(baselineRoot)
@@ -177,6 +265,15 @@ func CaptureBaseline(managedRoot, baselineRoot string, excludes []string) error 
 	}
 
 	return runRsync(src+"/", dst+"/", excludes, true)
+}
+
+func CaptureBaselineWithMode(managedRoot, baselineRoot string, excludes []string, mode string) error {
+	mode = effectiveRestoreMode(mode)
+	if mode == RestoreModeSnapshot {
+		volume := snapshotVolume(managedRoot)
+		return createAPFSSnapshot(volume, snapshotName())
+	}
+	return CaptureBaseline(managedRoot, baselineRoot, excludes)
 }
 
 func RestoreFromBaseline(baselineRoot, managedRoot string, excludes []string) error {
@@ -198,4 +295,13 @@ func RestoreFromBaseline(baselineRoot, managedRoot string, excludes []string) er
 	}
 
 	return runRsync(src+"/", dst+"/", excludes, deletePass)
+}
+
+func RestoreFromBaselineWithMode(baselineRoot, managedRoot string, excludes []string, mode string) error {
+	mode = effectiveRestoreMode(mode)
+	if mode == RestoreModeSnapshot {
+		volume := snapshotVolume(managedRoot)
+		return revertAPFSSnapshot(volume, snapshotName())
+	}
+	return RestoreFromBaseline(baselineRoot, managedRoot, excludes)
 }

@@ -73,7 +73,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "load policy: %v\n", err)
 			os.Exit(4)
 		}
-		if err := restore.CaptureBaseline(p.ManagedRoot, p.BaselineRoot, p.ExcludePaths); err != nil {
+		if err := restore.CaptureBaselineWithMode(p.ManagedRoot, p.BaselineRoot, p.ExcludePaths, p.RestoreMode); err != nil {
 			fmt.Fprintf(os.Stderr, "capture baseline: %v\n", err)
 			os.Exit(5)
 		}

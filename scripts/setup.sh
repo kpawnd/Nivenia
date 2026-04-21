@@ -17,7 +17,7 @@ need_cmd() {
 need_cmd go
 need_cmd sudo
 need_cmd launchctl
-need_cmd rsync
+need_cmd diskutil
 need_cmd sw_vers
 
 OS_VERSION="$(sw_vers -productVersion)"
@@ -42,9 +42,9 @@ if [[ ! -f "$UPDATE_SCRIPT_SOURCE" ]]; then
   UPDATE_SCRIPT_SOURCE="update.sh"
 fi
 
-EMERGENCY_SCRIPT_SOURCE="scripts/emergency_recovery_disable.sh"
-if [[ ! -f "$EMERGENCY_SCRIPT_SOURCE" ]]; then
-  EMERGENCY_SCRIPT_SOURCE="emergency_recovery_disable.sh"
+RECOVERY_SCRIPT_SOURCE="scripts/nivenia_recovery.sh"
+if [[ ! -f "$RECOVERY_SCRIPT_SOURCE" ]]; then
+  RECOVERY_SCRIPT_SOURCE="nivenia_recovery.sh"
 fi
 
 PREPARE_CLEAN_CAPTURE_SOURCE="scripts/prepare_clean_capture.sh"
@@ -62,27 +62,28 @@ sudo install -m 755 niveniad /usr/local/libexec/niveniad
 sudo install -m 755 niveniactl /usr/local/bin/niveniactl
 sudo install -m 755 "$UPDATE_SCRIPT_SOURCE" /usr/local/libexec/nivenia-updater
 sudo install -m 755 "$UPDATE_SCRIPT_SOURCE" /usr/local/bin/nivenia-update
-sudo install -m 755 "$EMERGENCY_SCRIPT_SOURCE" /usr/local/bin/nivenia-emergency-disable
-sudo install -m 755 "$EMERGENCY_SCRIPT_SOURCE" /var/lib/nivenia/recovery/nivenia-emergency-disable.sh
+if [[ -f "$RECOVERY_SCRIPT_SOURCE" ]]; then
+  sudo install -m 755 "$RECOVERY_SCRIPT_SOURCE" /usr/local/bin/nivenia-recovery
+  sudo install -m 755 "$RECOVERY_SCRIPT_SOURCE" /var/lib/nivenia/recovery/nivenia-recovery.sh
+fi
+sudo rm -f /usr/local/bin/nivenia-emergency-disable /usr/local/bin/nivenia-emergency-revert
+sudo rm -f /var/lib/nivenia/recovery/nivenia-emergency-disable.sh /var/lib/nivenia/recovery/nivenia-emergency-revert.sh
 sudo install -m 755 "$PREPARE_CLEAN_CAPTURE_SOURCE" /usr/local/libexec/nivenia-prepare-clean-capture
 sudo install -m 755 "$PREPARE_CLEAN_CAPTURE_SOURCE" /usr/local/bin/nivenia-prepare-clean-capture
 sudo install -m 644 configs/policy.json "$POLICY_PATH"
 sudo install -m 644 launchd/com.nivenia.restore.plist "$DAEMON_PATH"
 sudo install -m 644 launchd/com.nivenia.updater.plist "$UPDATER_DAEMON_PATH"
 
-if [[ "${NIVENIA_SKIP_PRECAPTURE_CLEAN:-0}" != "1" ]]; then
-  echo "checking pre-capture cleanup safety..."
-  if sudo /usr/local/bin/nivenia-prepare-clean-capture --preflight-only; then
-    echo "clearing user session/cache data before capture..."
-    if ! sudo /usr/local/bin/nivenia-prepare-clean-capture; then
-      echo "warning: pre-capture cleanup failed; continuing with capture" >&2
-    fi
-  else
-    echo "warning: pre-capture cleanup skipped (ownership preflight failed)" >&2
-    echo "warning: fix user cache ownership or set NIVENIA_SKIP_PRECAPTURE_CLEAN=1" >&2
-  fi
-else
-  echo "skipping pre-capture cleanup (NIVENIA_SKIP_PRECAPTURE_CLEAN=1)"
+echo "checking pre-capture cleanup safety..."
+if ! sudo /usr/local/bin/nivenia-prepare-clean-capture --preflight-only; then
+  echo "pre-capture cleanup preflight failed; fix ownership before continuing" >&2
+  exit 1
+fi
+
+echo "clearing user session/cache data before capture..."
+if ! sudo /usr/local/bin/nivenia-prepare-clean-capture; then
+  echo "pre-capture cleanup failed; refusing to capture baseline" >&2
+  exit 1
 fi
 
 echo "capturing baseline and enabling frozen mode..."
@@ -125,6 +126,7 @@ echo "thaw temporarily: sudo niveniactl thaw-once"
 echo "thaw until refreeze: sudo niveniactl thaw"
 echo "refreeze now: sudo niveniactl freeze --policy $POLICY_PATH --state $STATE_PATH"
 echo "manual update: sudo nivenia-update"
-echo "emergency disable: sudo nivenia-emergency-disable"
+echo "recovery tool: sudo nivenia-recovery disable"
+echo "recovery tool: sudo nivenia-recovery revert"
 echo "manual pre-capture cleanup: sudo nivenia-prepare-clean-capture"
-echo "recovery script: /var/lib/nivenia/recovery/nivenia-emergency-disable.sh"
+echo "recovery script: /var/lib/nivenia/recovery/nivenia-recovery.sh"

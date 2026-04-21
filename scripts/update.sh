@@ -114,11 +114,19 @@ for required in niveniad niveniactl com.nivenia.restore.plist com.nivenia.update
   fi
 done
 
-install -d "$INSTALL_LIBEXEC_DIR" "$INSTALL_BIN_DIR" "$POLICY_DIR" "$STATE_DIR"
+install -d "$INSTALL_LIBEXEC_DIR" "$INSTALL_BIN_DIR" "$POLICY_DIR" "$STATE_DIR" "/var/lib/nivenia/recovery"
 install -m 755 "$TMP_DIR/niveniad" "$INSTALL_LIBEXEC_DIR/niveniad"
 install -m 755 "$TMP_DIR/niveniactl" "$INSTALL_BIN_DIR/niveniactl"
 install -m 755 "$TMP_DIR/update.sh" "$INSTALL_LIBEXEC_DIR/nivenia-updater"
 install -m 755 "$TMP_DIR/update.sh" "$INSTALL_BIN_DIR/nivenia-update"
+
+if [[ -f "$TMP_DIR/nivenia_recovery.sh" ]]; then
+  install -m 755 "$TMP_DIR/nivenia_recovery.sh" "$INSTALL_BIN_DIR/nivenia-recovery"
+  install -m 755 "$TMP_DIR/nivenia_recovery.sh" "/var/lib/nivenia/recovery/nivenia-recovery.sh"
+fi
+
+rm -f "$INSTALL_BIN_DIR/nivenia-emergency-disable" "$INSTALL_BIN_DIR/nivenia-emergency-revert"
+rm -f "/var/lib/nivenia/recovery/nivenia-emergency-disable.sh" "/var/lib/nivenia/recovery/nivenia-emergency-revert.sh"
 
 if [[ ! -f "$POLICY_DIR/policy.json" && -f "$TMP_DIR/policy.json" ]]; then
   install -m 644 "$TMP_DIR/policy.json" "$POLICY_DIR/policy.json"

@@ -105,6 +105,9 @@ sanitize_user_home() {
   local user="$1"
   local home="$2"
 
+  clear_dir_contents "$home/Downloads"
+  clear_dir_contents "$home/Documents"
+
   clear_path "$home/Library/Safari"
   clear_path "$home/Library/WebKit/com.apple.Safari"
   clear_path "$home/Library/Cookies"
@@ -135,6 +138,49 @@ sanitize_user_home() {
 
   clear_path "$home/Library/Application Support/Firefox/Profiles"
 
+  # Collaboration caches
+  clear_path "$home/Library/Application Support/Microsoft/Teams"
+  clear_path "$home/Library/Application Support/Microsoft/Teams/Cache"
+  clear_path "$home/Library/Group Containers/UBF8T346G9.com.microsoft.teams"
+  clear_path "$home/Library/Group Containers/UBF8T346G9.com.microsoft.teams.shared"
+  clear_path "$home/Library/Containers/com.microsoft.teams2"
+
+  # Microsoft 365
+  clear_path "$home/Library/Group Containers/UBF8T346G9.Office"
+  clear_path "$home/Library/Group Containers/UBF8T346G9.OfficeOsfWebHost"
+  clear_path "$home/Library/Group Containers/UBF8T346G9.OneDriveStandaloneSuite"
+  clear_path "$home/Library/Preferences/com.microsoft.office.plist"
+
+  # Adobe Creative Cloud
+  clear_path "$home/Library/Application Support/Adobe"
+  clear_path "$home/Library/Caches/Adobe"
+  clear_path "$home/Library/Preferences/Adobe"
+
+  # Blender
+  clear_path "$home/Library/Application Support/Blender"
+  clear_path "$home/Library/Preferences/org.blenderfoundation.blender.plist"
+
+  # Azure Data Studio
+  clear_path "$home/Library/Application Support/azuredatastudio"
+  clear_path "$home/Library/Application Support/Azure Data Studio"
+  clear_path "$home/Library/Caches/com.microsoft.azuredatastudio"
+  clear_path "$home/Library/Preferences/com.microsoft.azuredatastudio.plist"
+
+  # Android Studio
+  for path in "$home/Library/Application Support/Google/AndroidStudio"*; do
+    clear_path "$path"
+  done
+  for path in "$home/Library/Preferences/AndroidStudio"*; do
+    clear_path "$path"
+  done
+  for path in "$home/Library/Caches/AndroidStudio"*; do
+    clear_path "$path"
+  done
+
+  # Cisco Packet Tracer
+  clear_path "$home/Library/Application Support/Cisco Packet Tracer"
+  clear_path "$home/Library/Preferences/com.cisco.packettracer.plist"
+
   ensure_owned_dir "$user" "$home/Library/Caches"
   clear_dir_contents "$home/Library/Caches"
 }
@@ -144,6 +190,19 @@ kill_if_running "Safari"
 kill_if_running "Google Chrome"
 kill_if_running "Microsoft Edge"
 kill_if_running "firefox"
+kill_if_running "Teams"
+kill_if_running "Microsoft Teams"
+kill_if_running "Adobe Desktop Service"
+kill_if_running "Creative Cloud"
+kill_if_running "OneDrive"
+kill_if_running "Microsoft Excel"
+kill_if_running "Microsoft Word"
+kill_if_running "Microsoft PowerPoint"
+kill_if_running "Microsoft Outlook"
+kill_if_running "Android Studio"
+kill_if_running "Azure Data Studio"
+kill_if_running "Blender"
+kill_if_running "PacketTracer"
 kill_if_running "cfprefsd"
 
 preflight_ok=1

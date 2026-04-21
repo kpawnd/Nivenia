@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nivenia/internal/config"
+	"nivenia/internal/integrity"
 	"nivenia/internal/restore"
 	"nivenia/internal/state"
 )
@@ -118,7 +119,21 @@ func (e Engine) RunBootRestore() error {
 
 	_ = os.WriteFile(marker, []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
 
-	if err := restore.RestoreFromBaselineWithMode(e.Policy.BaselineRoot, e.Policy.ManagedRoot, e.Policy.ExcludePaths, e.Policy.RestoreMode); err != nil {
+	policyPath := e.Policy.PolicyPath
+	if policyPath == "" {
+		policyPath = "/etc/nivenia/policy.json"
+	}
+	if err := integrity.VerifyBaseline(policyPath, e.Policy.ManagedRoot); err != nil {
+		s.Mode = state.ModeThawed
+		s.LastRestoreOK = false
+		s.LastMessage = fmt.Sprintf("integrity check failed; auto-thawed, restore refused: %v", err)
+		_ = state.Save(e.Policy.StateFile, s)
+		appendLog(e.Policy.LogFile, s.LastMessage)
+		_ = os.Remove(marker)
+		return nil
+	}
+
+	if err := restore.RestoreFromBaseline(e.Policy.ManagedRoot); err != nil {
 		s.FailureCount++
 		s.LastRestoreOK = false
 		s.LastMessage = fmt.Sprintf("restore failed (%d/%d): %v", s.FailureCount, maxConsecutiveRestoreFailures, err)

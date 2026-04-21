@@ -1,31 +1,5 @@
 {
   "managed_root": "/System/Volumes/Data",
-  "baseline_root": "/var/lib/nivenia/baseline",
-  "exclude_paths": [
-    "/private/tmp",
-    "/private/var/tmp",
-    "/private/var/run",
-    "/private/var/vm",
-    "/private/var/folders",
-    "/private/var/log",
-    "/private/var/db/nivenia",
-    "/private/var/lib/nivenia",
-    "/private/var/db/diagnostics",
-    "/private/var/db/DetachedSignatures",
-    "/private/var/db/AuthenticationAuthority",
-    "/private/var/db/KerberosKDC",
-    "/private/var/protected",
-    "/private/etc/fstab",
-    "/private/etc/sudoers",
-    "/private/etc/sudoers.d",
-    "/Library/Caches",
-    "/Library/Frameworks",
-    "/Library/SystemExtensions",
-    "/Library/Logs",
-    "/Volumes",
-    "/dev"
-  ],
-  "restore_mode": "rsync",
   "state_file": "/var/lib/nivenia/state.json",
   "log_file": "/var/log/nivenia.log"
 }

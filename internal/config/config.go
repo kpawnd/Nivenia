@@ -7,12 +7,10 @@ import (
 )
 
 type Policy struct {
-	ManagedRoot  string   `json:"managed_root"`
-	BaselineRoot string   `json:"baseline_root"`
-	ExcludePaths []string `json:"exclude_paths"`
-	RestoreMode  string   `json:"restore_mode"`
-	StateFile    string   `json:"state_file"`
-	LogFile      string   `json:"log_file"`
+	ManagedRoot string `json:"managed_root"`
+	StateFile   string `json:"state_file"`
+	LogFile     string `json:"log_file"`
+	PolicyPath  string `json:"-"`
 }
 
 func Load(path string) (Policy, error) {
@@ -24,40 +22,9 @@ func Load(path string) (Policy, error) {
 	if err := json.Unmarshal(b, &p); err != nil {
 		return p, fmt.Errorf("parse policy: %w", err)
 	}
-	if p.BaselineRoot == "" {
-		p.BaselineRoot = "/var/lib/nivenia/baseline"
-	}
+	p.PolicyPath = path
 	if p.ManagedRoot == "" {
 		p.ManagedRoot = "/System/Volumes/Data"
-	}
-	if len(p.ExcludePaths) == 0 {
-		p.ExcludePaths = []string{
-			"/private/tmp",
-			"/private/var/tmp",
-			"/private/var/run",
-			"/private/var/vm",
-			"/private/var/folders",
-			"/private/var/log",
-			"/private/var/db/nivenia",
-			"/private/var/lib/nivenia",
-			"/private/var/db/diagnostics",
-			"/private/var/db/DetachedSignatures",
-			"/private/var/db/AuthenticationAuthority",
-			"/private/var/db/KerberosKDC",
-			"/private/var/protected",
-			"/private/etc/fstab",
-			"/private/etc/sudoers",
-			"/private/etc/sudoers.d",
-			"/Library/Caches",
-			"/Library/Frameworks",
-			"/Library/SystemExtensions",
-			"/Library/Logs",
-			"/Volumes",
-			"/dev",
-		}
-	}
-	if p.RestoreMode == "" {
-		p.RestoreMode = "rsync"
 	}
 	if p.StateFile == "" {
 		p.StateFile = "/var/lib/nivenia/state.json"

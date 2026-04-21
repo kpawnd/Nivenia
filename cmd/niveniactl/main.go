@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"nivenia/internal/config"
+	"nivenia/internal/integrity"
 	"nivenia/internal/platform"
 	"nivenia/internal/restore"
 	"nivenia/internal/state"
@@ -73,12 +74,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "load policy: %v\n", err)
 			os.Exit(4)
 		}
-		if err := restore.CaptureBaselineWithMode(p.ManagedRoot, p.BaselineRoot, p.ExcludePaths, p.RestoreMode); err != nil {
+		if err := restore.CaptureBaseline(p.ManagedRoot); err != nil {
 			fmt.Fprintf(os.Stderr, "capture baseline: %v\n", err)
 			os.Exit(5)
 		}
+		if err := integrity.CaptureBaseline(*policyPath, p.ManagedRoot); err != nil {
+			fmt.Fprintf(os.Stderr, "integrity capture: %v\n", err)
+			os.Exit(6)
+		}
 		s.Mode = state.ModeFrozen
-		s.LastMessage = "mode set to frozen; baseline captured"
+		s.LastMessage = "mode set to frozen; baseline and integrity captured"
 	case "thaw":
 		s.Mode = state.ModeThawed
 		s.LastMessage = "mode set to thawed"

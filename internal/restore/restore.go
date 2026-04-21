@@ -271,9 +271,9 @@ func deviceForVolume(volume string) (string, error) {
 }
 
 // mountSnapshotAt mounts a named APFS snapshot read-only at mountPoint.
-// mount_apfs is available on all macOS versions that support APFS (10.12+).
+// nobrowse hides it from Finder. mount_apfs is available on all macOS with APFS (10.12+).
 func mountSnapshotAt(device, snapshotName, mountPoint string) error {
-	cmd := exec.Command("mount_apfs", "-s", snapshotName, device, mountPoint)
+	cmd := exec.Command("mount_apfs", "-o", "nobrowse", "-s", snapshotName, device, mountPoint)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("mount_apfs -s %q %s: %w: %s", snapshotName, device, err, strings.TrimSpace(string(out)))
 	}

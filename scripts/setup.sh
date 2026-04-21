@@ -89,22 +89,22 @@ fi
 echo "capturing baseline and enabling frozen mode..."
 sudo /usr/local/bin/niveniactl freeze --policy "$POLICY_PATH" --state "$STATE_PATH"
 
-echo "starting launch daemon..."
+echo "verifying restore daemon..."
+# Run the daemon directly before bootstrapping — bootstrap fires RunAtLoad immediately,
+# which would race with this invocation for the lock and produce a false "skipped" result.
 sudo rm -f /var/lib/nivenia/restore.lock
+if ! sudo /usr/local/libexec/niveniad --policy "$POLICY_PATH"; then
+  echo "restore verification failed; logs:" >&2
+  sudo tail -n 60 /var/log/niveniad.err.log 2>/dev/null >&2 || true
+  sudo tail -n 20 /var/log/nivenia.log 2>/dev/null >&2 || true
+  exit 1
+fi
+
+echo "starting launch daemon..."
 sudo launchctl bootout system "$DAEMON_PATH" >/dev/null 2>&1 || true
 sudo launchctl bootstrap system "$DAEMON_PATH"
 sudo launchctl bootout system "$UPDATER_DAEMON_PATH" >/dev/null 2>&1 || true
 sudo launchctl bootstrap system "$UPDATER_DAEMON_PATH"
-
-echo "verifying restore daemon..."
-# Run niveniad directly so we control the arguments — kickstart always uses the plist args
-# (which include --require-loginwindow), causing it to refuse when a user is logged in during setup.
-if ! sudo /usr/local/libexec/niveniad --policy "$POLICY_PATH"; then
-  echo "restore verification failed; check logs:" >&2
-  echo "  sudo tail -n 120 /var/log/nivenia.log" >&2
-  echo "  sudo tail -n 120 /var/log/niveniad.err.log" >&2
-  exit 1
-fi
 
 echo "done"
 echo "status:"

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"nivenia/internal/config"
-	"nivenia/internal/integrity"
 	"nivenia/internal/restore"
 	"nivenia/internal/state"
 )
@@ -98,9 +97,6 @@ func (e Engine) RunBootRestore() error {
 	}
 	defer os.Remove(lockPath)
 
-	marker := "/var/lib/nivenia/restore.started"
-	_ = os.MkdirAll(filepath.Dir(marker), 0o755)
-
 	switch s.Mode {
 	case state.ModeThawed:
 		s.LastRestoreOK = true
@@ -117,29 +113,12 @@ func (e Engine) RunBootRestore() error {
 		return nil
 	}
 
-	_ = os.WriteFile(marker, []byte(time.Now().UTC().Format(time.RFC3339)), 0o644)
-
-	policyPath := e.Policy.PolicyPath
-	if policyPath == "" {
-		policyPath = "/etc/nivenia/policy.json"
-	}
-	if err := integrity.VerifyBaseline(policyPath, e.Policy.ManagedRoot); err != nil {
-		s.Mode = state.ModeThawed
-		s.LastRestoreOK = false
-		s.LastMessage = fmt.Sprintf("integrity check failed; auto-thawed, restore refused: %v", err)
-		_ = state.Save(e.Policy.StateFile, s)
-		appendLog(e.Policy.LogFile, s.LastMessage)
-		_ = os.Remove(marker)
-		return nil
-	}
+	appendLog(e.Policy.LogFile, "restore started")
 
 	if err := restore.RestoreFromBaseline(e.Policy.ManagedRoot, e.Policy.RestorePaths); err != nil {
 		s.FailureCount++
 		s.LastRestoreOK = false
 		s.LastMessage = fmt.Sprintf("restore failed (%d/%d): %v", s.FailureCount, maxConsecutiveRestoreFailures, err)
-		if s.FailureCount >= maxConsecutiveRestoreFailures {
-			s.LastMessage = fmt.Sprintf("restore failed %d times; frozen mode preserved (no auto-thaw): %v", s.FailureCount, err)
-		}
 		_ = state.Save(e.Policy.StateFile, s)
 		appendLog(e.Policy.LogFile, s.LastMessage)
 		return err
@@ -151,7 +130,6 @@ func (e Engine) RunBootRestore() error {
 	if err := state.Save(e.Policy.StateFile, s); err != nil {
 		return err
 	}
-	_ = os.Remove(marker)
 	appendLog(e.Policy.LogFile, s.LastMessage)
 	return nil
 }

@@ -139,7 +139,7 @@ Updater log: `/var/log/nivenia-updater.log`
 
 Use this if the machine gets stuck during startup.
 
-**1.** Boot into macOS Recovery (hold Power on Apple Silicon or Cmd+R on Intel at startup) and open Terminal.
+**1.** Boot into macOS Recovery (hold Cmd+R at startup) and open Terminal.
 
 **2.** Mount the Data volume:
 
@@ -174,10 +174,10 @@ Community-tested configurations. Add a row or fill in a result by opening a PR a
 
 | macOS | Version | Tested | Notes |
 |---|---|---|---|
-| Monterey | 12 | ☐ | |
-| Ventura | 13 | ☐ | |
-| Sonoma | 14 | ✓ | Boot restore verified. Desktop, /Applications, files up to 50 GB. |
-| Sequoia | 15 | ☐ | |
+| Monterey | 12 | Not tested. | |
+| Ventura | 13 | Not tested. | |
+| Sonoma | 14 | Not tested. | |
+| Sequoia | 15 | In progress | Boot restore verified. Desktop, files up to 50 GB. |
 
 ---
 

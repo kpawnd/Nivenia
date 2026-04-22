@@ -177,7 +177,7 @@ Community-tested configurations. Add a row or fill in a result by opening a PR a
 | Monterey | 12 | Not tested. | |
 | Ventura | 13 | Not tested. | |
 | Sonoma | 14 | Not tested. | |
-| Sequoia | 15 | In progress | Boot restore verified. Desktop, files up to 50 GB. |
+| Sequoia | 15 | Failed. | Boot restore failed. |
 
 ---
 

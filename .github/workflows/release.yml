@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - dev
     tags:
       - "v*"
 
@@ -18,6 +19,7 @@ jobs:
     outputs:
       release_version: ${{ steps.version.outputs.value }}
       release_tag: ${{ steps.version.outputs.tag }}
+      is_prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,12 +34,16 @@ jobs:
         shell: bash
         run: |
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-            echo "tag=v${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "value=${VERSION}"        >> "$GITHUB_OUTPUT"
+            echo "tag=v${VERSION}"         >> "$GITHUB_OUTPUT"
+            echo "prerelease=false"        >> "$GITHUB_OUTPUT"
           else
-            VERSION="0.0.0-${GITHUB_SHA::7}-${GITHUB_RUN_ID}"
-            echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+            SHORT_SHA="${GITHUB_SHA::7}"
+            VERSION="dev-${SHORT_SHA}"
+            echo "value=${VERSION}"        >> "$GITHUB_OUTPUT"
+            echo "tag=v${VERSION}"         >> "$GITHUB_OUTPUT"
+            echo "prerelease=true"         >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build binaries
@@ -50,15 +56,18 @@ jobs:
           set -euo pipefail
           OUT_DIR="dist/darwin_amd64"
           mkdir -p "$OUT_DIR"
-          go build -trimpath -ldflags "-s -w" -o "$OUT_DIR/niveniad" ./cmd/niveniad
-          go build -trimpath -ldflags "-s -w" -o "$OUT_DIR/niveniactl" ./cmd/niveniactl
-          cp configs/policy.json "$OUT_DIR/policy.json"
-          cp launchd/com.nivenia.restore.plist "$OUT_DIR/com.nivenia.restore.plist"
-          cp launchd/com.nivenia.updater.plist "$OUT_DIR/com.nivenia.updater.plist"
-          cp scripts/setup.sh "$OUT_DIR/setup.sh"
-          cp scripts/update.sh "$OUT_DIR/update.sh"
-          cp scripts/nivenia_recovery.sh "$OUT_DIR/nivenia_recovery.sh"
-          cp scripts/prepare_clean_capture.sh "$OUT_DIR/prepare_clean_capture.sh"
+          VERSION="${{ steps.version.outputs.value }}"
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "$OUT_DIR/niveniad"   ./cmd/niveniad
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "$OUT_DIR/niveniactl" ./cmd/niveniactl
+          cp configs/policy.json                      "$OUT_DIR/policy.json"
+          cp launchd/com.nivenia.restore.plist            "$OUT_DIR/com.nivenia.restore.plist"
+          cp launchd/com.nivenia.updater.plist            "$OUT_DIR/com.nivenia.updater.plist"
+          cp launchd/com.nivenia.scheduled-restart.plist  "$OUT_DIR/com.nivenia.scheduled-restart.plist"
+          cp scripts/setup.sh                             "$OUT_DIR/setup.sh"
+          cp scripts/update.sh                            "$OUT_DIR/update.sh"
+          cp scripts/nivenia_recovery.sh                  "$OUT_DIR/nivenia_recovery.sh"
+          cp scripts/prepare_clean_capture.sh             "$OUT_DIR/prepare_clean_capture.sh"
+          cp scripts/nivenia_scheduled_restart.sh         "$OUT_DIR/nivenia_scheduled_restart.sh"
 
       - name: Create archive
         shell: bash
@@ -78,21 +87,20 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs:
-      - build-binaries
+    needs: build-binaries
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Publish release assets
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.build-binaries.outputs.release_tag }}
-          target_commitish: ${{ github.sha }}
-          name: Nivenia ${{ needs.build-binaries.outputs.release_version }}
+          tag_name:            ${{ needs.build-binaries.outputs.release_tag }}
+          target_commitish:    ${{ github.sha }}
+          name:                Nivenia ${{ needs.build-binaries.outputs.release_version }}
+          prerelease:          ${{ needs.build-binaries.outputs.is_prerelease }}
           generate_release_notes: true
-          files: artifacts/**/*.tar.gz
+          files:               artifacts/**/*.tar.gz

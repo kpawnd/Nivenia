@@ -1,156 +1,259 @@
-# Nivenia reboot-restore
+# Nivenia
 
-Nivenia provides simple reboot-to-restore for Intel Macs.
+A reboot-to-restore system for Intel Mac lab environments. On every boot, Nivenia restores a set of directories from a frozen APFS snapshot back to the live volume. Changes made during a session — downloaded files, installed applications, browser data, login credentials — are wiped on the next reboot.
 
-Supported macOS versions: Monterey (12) through Sequoia (15) only.
+---
 
-It restores a system-wide writable root (`/System/Volumes/Data`) back to a baseline on every boot while frozen.
+## Requirements
 
-## Simple setup
+- Intel Mac (x86\_64 only)
+- macOS Monterey (12) through Sequoia (15)
+- Go 1.22 or later (build from source only)
+- Root / sudo access during setup
 
-Run this from the repository root:
+---
+
+## How it works
+
+1. **Setup** cleans up user session data, then captures an APFS snapshot of the Data volume via `tmutil localsnapshot`.
+2. **On every boot**, a LaunchDaemon mounts that snapshot read-only (`mount_apfs -o nobrowse`) and rsyncs the configured restore paths back to the live volume — deleting anything not in the snapshot.
+3. The snapshot is the permanent baseline. Changes only affect the live volume and are reversed at the next reboot.
+
+What gets restored is controlled by `restore_paths` in `policy.json`. Defaults are `/System/Volumes/Data/Users` and `/System/Volumes/Data/Applications`.
+
+---
+
+## Quick start
 
 ```sh
+git clone https://github.com/kpawnd/Nivenia.git
+cd Nivenia
 bash scripts/setup.sh
 ```
 
-What setup does:
+Setup requires sudo and an internet-connected Go toolchain. It will prompt for your password.
 
-- builds `niveniad` and `niveniactl`
-- installs binaries to `/usr/local/libexec` and `/usr/local/bin`
-- installs updater command as `nivenia-update`
-- installs recovery command as `nivenia-recovery`
-- installs pre-capture cleanup command as `nivenia-prepare-clean-capture`
-- installs policy to `/etc/nivenia/policy.json`
-- clears browser/session/cache data before first baseline capture (required)
-- captures initial baseline
-- enables restore and updater launch daemons at boot
+### What setup does
+
+1. Builds `niveniad` and `niveniactl` from source
+2. Installs binaries, scripts, and policy to system paths
+3. Configures log rotation under `/etc/newsyslog.d/`
+4. Runs a preflight check on user directory ownership
+5. Clears user session and cache data (see below)
+6. Captures the baseline APFS snapshot and sets frozen mode
+7. Verifies the restore works before registering launch daemons
+8. Registers and starts the restore and updater daemons
+
+### What the cleanup clears
+
+Before capturing the baseline, setup wipes:
+
+- `~/Downloads`, `~/Documents`
+- Safari, Chrome, Edge, Firefox: cookies, history, sessions, login data
+- Microsoft Teams, Microsoft 365 (Word, Excel, Outlook, OneDrive)
+- Adobe Creative Cloud, Blender, Azure Data Studio, Android Studio, Cisco Packet Tracer
+- `~/Library/Caches`, `/Library/Caches`
+
+It does **not** touch `/etc/sudoers`, system preferences, or installed applications.
+
+---
 
 ## Commands
 
-Use `sudo` for mode changes so macOS asks for the local administrator password.
+All state-changing commands require `sudo`.
 
-```sh
-sudo niveniactl status
-sudo niveniactl thaw
-sudo niveniactl thaw-once
-sudo niveniactl freeze --policy /etc/nivenia/policy.json --state /var/lib/nivenia/state.json
-sudo nivenia-update
-sudo nivenia-recovery disable
-sudo nivenia-recovery revert
-sudo nivenia-prepare-clean-capture
+| Command | Effect |
+|---|---|
+| `sudo niveniactl status` | Show current mode and last restore result |
+| `sudo niveniactl freeze --policy /etc/nivenia/policy.json` | Capture a new baseline and set mode to frozen |
+| `sudo niveniactl thaw` | Skip all restores until manually refrozen |
+| `sudo niveniactl thaw-once` | Skip the next boot restore only, then return to frozen |
+| `sudo nivenia-update` | Check for and apply an update |
+| `sudo nivenia-recovery disable` | Emergency: force thawed mode and disable daemons |
+| `sudo nivenia-recovery revert` | Emergency: manually rsync the snapshot onto the live volume |
+| `sudo nivenia-prepare-clean-capture` | Re-run session cleanup without a full setup |
+
+### Mode behaviour
+
+| Mode | Behaviour |
+|---|---|
+| `frozen` | Restores baseline on every boot |
+| `thaw` | No restore until refrozen |
+| `thaw_once` | Skips one boot restore, then reverts to frozen |
+
+> **Important — refreezing:** Always run `sudo nivenia-prepare-clean-capture` before `freeze` to avoid capturing a dirty baseline (browser cookies, student files, etc.).
+
+---
+
+## Configuration
+
+Default policy: `/etc/nivenia/policy.json`
+
+```json
+{
+  "managed_root": "/System/Volumes/Data",
+  "restore_paths": [
+    "/System/Volumes/Data/Users",
+    "/System/Volumes/Data/Applications"
+  ],
+  "state_file": "/var/lib/nivenia/state.json",
+  "log_file": "/var/log/nivenia.log"
+}
 ```
 
-Pre-capture cleanup is required. Setup will stop if the cleanup preflight fails.
+| Field | Description |
+|---|---|
+| `managed_root` | The APFS Data volume root. Snapshot is taken here. |
+| `restore_paths` | Directories rsynced from snapshot to live on each boot |
+| `state_file` | Path to the runtime state JSON |
+| `log_file` | Path to the main log file |
 
-Cleanup wipes user Downloads, Documents, browser data, and common app caches (Teams, Microsoft 365, Adobe Creative Cloud, Blender, Azure Data Studio, Android Studio, Cisco Packet Tracer). It does not touch `/etc/sudoers`.
+---
 
-Mode behavior:
+## Logs
 
-- `frozen`: restore baseline every boot
-- `thaw`: do not restore until frozen again
-- `thaw-once`: skip one boot restore, then return to frozen
+| File | Contents |
+|---|---|
+| `/var/log/nivenia.log` | Restore events (started, completed, skipped, failed) |
+| `/var/log/niveniad.err.log` | Daemon stderr — detailed restore progress and errors |
+| `/var/log/niveniad.out.log` | Daemon stdout |
+| `/var/log/nivenia-updater.log` | Updater run log |
 
-## Updater service
+Logs rotate at 5 MB, keeping 7 files.
 
-Nivenia updates itself using a root launchd service:
+---
 
-- plist: `/Library/LaunchDaemons/com.nivenia.updater.plist`
-- command: `/usr/local/libexec/nivenia-updater`
-- interval: every 21600 seconds (6 hours)
-- log: `/var/log/nivenia-updater.log`
+## Updater
 
-Manual update check:
+Nivenia checks for updates every 6 hours via a LaunchDaemon. It downloads the latest release from GitHub, replaces binaries in place, and restarts only the updater daemon. The restore daemon picks up new binaries on the next natural reboot — it is never restarted mid-session.
 
 ```sh
-sudo nivenia-update
+sudo nivenia-update   # manual check
 ```
 
-## Policy
+Updater log: `/var/log/nivenia-updater.log`
 
-Default policy file: `configs/policy.json`
+---
 
-Key fields:
+## Scheduled nightly restart
 
-- `managed_root`: mount point for the data you want reverted on boot
-- `NIVENIA_SNAPSHOT_VOLUME` (env): optional override for the APFS volume to snapshot/revert
+A LaunchDaemon fires at 03:00 every night and reboots the machine — triggering the restore — as long as no interactive user session is active. If a user is logged in, the restart is skipped and the machine is checked again the next night.
 
-Notes:
+This ensures lab machines are returned to baseline overnight without disrupting active sessions.
 
-- If `managed_root` points directly at the dedicated APFS volume, you do not need `NIVENIA_SNAPSHOT_VOLUME`.
-- Use `NIVENIA_SNAPSHOT_VOLUME` when the managed path is a bind mount or nested mount and the snapshot target is different.
+The daemon is installed automatically by setup. No manual configuration is needed.
 
-Restore behavior:
-
-- boot restore waits for the configured `managed_root` to be available before restore
-- restore daemon runs once at boot (not continuously during uptime)
-- restore aborts if an interactive console user is already logged in
-- restore uses APFS snapshots (`diskutil apfs snapshot/revertToSnapshot`; on Monterey snapshot creation falls back to `tmutil snapshot`)
-- restore verifies integrity before revert (snapshot metadata, policy hash, and installed Nivenia binary/script hashes)
-- if integrity verification fails, restore is refused and mode is forced to `thaw`
-- restore failures are tracked, but mode is not auto-changed to thawed
-
-## Release pipeline
-
-Workflow: `.github/workflows/release.yml`
-
-- builds Intel macOS binaries
-- packages `niveniad`, `niveniactl`, `policy.json`, `setup.sh`, `update.sh`, `nivenia_recovery.sh`, and launchd plists into a release tarball
-- publishes on `main` pushes and `v*` tags
-- emits normal GitHub Releases so `nivenia-update` can discover them via `/releases/latest`
-
-## Notes
-
-- first `freeze` captures baseline and can take time
-- snapshot capture and restore use APFS snapshots (volume-wide)
-- state is stored at `/var/lib/nivenia/state.json`
-- snapshot name is stored at `/var/lib/nivenia/snapshot.json` (used when snapshot names are auto-generated)
-- recovery script is installed at `/var/lib/nivenia/recovery/nivenia-recovery.sh` for Recovery mode use
-- restore uses a lock file to prevent concurrent runs (`/var/lib/nivenia/restore.lock`)
-
-Snapshot guidance:
-
-- APFS snapshot revert is volume-wide; you cannot exclude directories the way rsync does.
-- For DeepFreeze-like isolation, create a dedicated APFS volume and set `managed_root` to that volume's mount point.
-- Optional overrides: set `NIVENIA_SNAPSHOT_VOLUME` if you need a custom volume. `NIVENIA_SNAPSHOT_NAME` is honored when `diskutil apfs snapshot` is available; on Monterey, snapshot names are auto-generated and stored in `/var/lib/nivenia/snapshot.json`.
+---
 
 ## Recovery mode
 
-If a system gets stuck during startup:
+Use this if the machine gets stuck during startup.
 
-1. Boot into macOS Recovery and open Terminal.
-2. Identify the target volume name:
+**1.** Boot into macOS Recovery (hold Power on Apple Silicon or Cmd+R on Intel at startup) and open Terminal.
+
+**2.** Mount the Data volume:
 
 ```sh
 diskutil list
-```
-
-3. Mount the target data volume (example name below; yours may differ):
-
-```sh
 diskutil mount "Macintosh HD - Data"
 ```
 
-4. Run the recovery script from the mounted volume (it auto-detects if possible):
+**3.** Disable Nivenia (forces thawed mode, disables daemons):
 
 ```sh
-bash "/Volumes/Macintosh HD - Data/var/lib/nivenia/recovery/nivenia-recovery.sh" disable "/Volumes/Macintosh HD - Data"
+sudo bash "/Volumes/Macintosh HD - Data/var/lib/nivenia/recovery/nivenia-recovery.sh" disable
 ```
 
-This forces thawed mode and disables Nivenia launch daemons.
-
-To revert a snapshot in Recovery (uses `/var/lib/nivenia/snapshot.json` when present):
+**4.** Or revert the snapshot manually (rsyncs baseline back to live):
 
 ```sh
-bash "/Volumes/Macintosh HD - Data/var/lib/nivenia/recovery/nivenia-recovery.sh" revert "/Volumes/Macintosh HD - Data"
+sudo bash "/Volumes/Macintosh HD - Data/var/lib/nivenia/recovery/nivenia-recovery.sh" revert
 ```
 
-If auto-detection fails, set a volume explicitly:
+The recovery script auto-detects the volume. Pass the path explicitly if it fails:
 
 ```sh
-NIVENIA_RECOVERY_VOLUME="/Volumes/<Your Data Volume>" \
-  bash "/Volumes/<Your Data Volume>/var/lib/nivenia/recovery/nivenia-recovery.sh" disable
+sudo bash "/Volumes/Macintosh HD - Data/var/lib/nivenia/recovery/nivenia-recovery.sh" disable "/Volumes/Macintosh HD - Data"
 ```
+
+---
+
+## Test matrix
+
+Community-tested configurations. Add a row or fill in a result by opening a PR against `dev`.
+
+| macOS | Version | Tested | Notes |
+|---|---|---|---|
+| Monterey | 12 | ☐ | |
+| Ventura | 13 | ☐ | |
+| Sonoma | 14 | ✓ | Boot restore verified. Desktop, /Applications, files up to 50 GB. |
+| Sequoia | 15 | ☐ | |
+
+---
+
+## Releases and versioning
+
+### Creating a release
+
+Releases are published automatically by the GitHub Actions workflow when you push a version tag:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow builds the `darwin/amd64` binary, packages it into a `.tar.gz`, and publishes a GitHub Release. The updater on installed machines picks it up automatically within 6 hours.
+
+### Dev builds
+
+Pushes to `main` or `dev` without a tag produce a dev build versioned as `dev-<sha>`. These are published as pre-releases and are not picked up by the auto-updater (which only tracks the latest full release).
+
+### Version format
+
+| Trigger | Example version |
+|---|---|
+| `git tag v1.2.3` | `1.2.3` |
+| Push to `main`/`dev` | `dev-a3f1c2e` |
+
+---
+
+## Branch strategy
+
+| Branch | Purpose |
+|---|---|
+| `main` | Stable, tagged releases only |
+| `dev` | Active development — clone this branch for testing |
+
+To test the latest code before it is tagged:
+
+```sh
+git clone -b dev https://github.com/kpawnd/Nivenia.git
+cd Nivenia
+bash scripts/setup.sh
+```
+
+---
+
+## File layout
+
+```
+/usr/local/libexec/niveniad                        restore daemon
+/usr/local/libexec/nivenia-updater                 updater script
+/usr/local/libexec/nivenia-prepare-clean-capture   pre-capture cleanup script
+/usr/local/libexec/nivenia-scheduled-restart       nightly restart script
+/usr/local/bin/niveniactl                          CLI control tool
+/usr/local/bin/nivenia-update                      updater alias
+/usr/local/bin/nivenia-recovery                    recovery tool
+/etc/nivenia/policy.json                           policy
+/var/lib/nivenia/state.json                        runtime mode state
+/var/lib/nivenia/snapshot.json                     snapshot name and volume
+/var/lib/nivenia/recovery/                         recovery scripts (accessible from Recovery OS)
+/Library/LaunchDaemons/com.nivenia.restore.plist
+/Library/LaunchDaemons/com.nivenia.updater.plist
+/Library/LaunchDaemons/com.nivenia.scheduled-restart.plist
+```
+
+---
 
 ## License
 

@@ -149,20 +149,42 @@ func VerifyBaseline(policyPath, managedRoot string) error {
 
 func writeRecord(record IntegrityRecord) error {
 	path := IntegrityPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return err
 	}
+	// fsync before rename so a power loss doesn't leave a zero-byte integrity
+	// file; fsync the directory so the rename itself is durable.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
+	}
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
 	}
 	return nil
 }

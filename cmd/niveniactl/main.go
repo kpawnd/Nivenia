@@ -150,12 +150,18 @@ func main() {
 			os.Exit(6)
 		}
 		s.Mode = state.ModeFrozen
+		s.LastRestoreOK = true
+		s.FailureCount = 0
 		s.LastMessage = "mode set to frozen; baseline and integrity captured"
 	case "thaw":
 		s.Mode = state.ModeThawed
+		s.LastRestoreOK = true
+		s.FailureCount = 0
 		s.LastMessage = "mode set to thawed"
 	case "thaw-once":
 		s.Mode = state.ModeThawOnce
+		s.LastRestoreOK = true
+		s.FailureCount = 0
 		s.LastMessage = "mode set to thaw_once"
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", cmd)

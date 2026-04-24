@@ -180,11 +180,13 @@ revert_snapshot() {
   local policy_path="$volume/private/etc/nivenia/policy.json"
   [[ -f "$policy_path" ]] || policy_path="$volume/etc/nivenia/policy.json"
   if [[ -f "$policy_path" ]] && command -v python3 >/dev/null 2>&1; then
+    # Pass policy_path as argv[1] so volume names with quotes/apostrophes
+    # (e.g. "John's HD - Data") don't break the inline Python string literal.
     local configured_root
-    configured_root="$(python3 -c "import json; p=json.load(open('$policy_path')); print(p.get('managed_root','').rstrip('/'))" 2>/dev/null || true)"
+    configured_root="$(python3 -c "import json,sys;p=json.load(open(sys.argv[1]));print(p.get('managed_root','').rstrip('/'))" "$policy_path" 2>/dev/null || true)"
     if [[ -n "$configured_root" ]]; then
       local abs_paths=()
-      mapfile -t abs_paths < <(python3 -c "import json; p=json.load(open('$policy_path')); [print(x) for x in p.get('restore_paths',[])]" 2>/dev/null || true)
+      mapfile -t abs_paths < <(python3 -c "import json,sys;p=json.load(open(sys.argv[1]));[print(x) for x in p.get('restore_paths',[])]" "$policy_path" 2>/dev/null || true)
       if [[ ${#abs_paths[@]} -gt 0 ]]; then
         restore_subdirs=()
         for abs in "${abs_paths[@]}"; do

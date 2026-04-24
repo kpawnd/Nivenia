@@ -134,6 +134,7 @@ func (e Engine) RunBootRestore(ctx context.Context) error {
 	switch s.Mode {
 	case state.ModeThawed:
 		s.LastRestoreOK = true
+		s.FailureCount = 0
 		s.LastMessage = "thawed mode: restore skipped"
 		if err := state.Save(e.Policy.StateFile, s); err != nil {
 			appendLog(e.Policy.LogFile, "warn: could not save state: "+err.Error())
@@ -143,6 +144,7 @@ func (e Engine) RunBootRestore(ctx context.Context) error {
 	case state.ModeThawOnce:
 		s.Mode = state.ModeFrozen
 		s.LastRestoreOK = true
+		s.FailureCount = 0
 		s.LastMessage = "thaw_once consumed: restore skipped this boot"
 		if err := state.Save(e.Policy.StateFile, s); err != nil {
 			appendLog(e.Policy.LogFile, "warn: could not save state after thaw_once: "+err.Error())

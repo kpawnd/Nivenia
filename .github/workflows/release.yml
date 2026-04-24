@@ -62,12 +62,10 @@ jobs:
           cp configs/policy.json                      "$OUT_DIR/policy.json"
           cp launchd/com.nivenia.restore.plist            "$OUT_DIR/com.nivenia.restore.plist"
           cp launchd/com.nivenia.updater.plist            "$OUT_DIR/com.nivenia.updater.plist"
-          cp launchd/com.nivenia.scheduled-restart.plist  "$OUT_DIR/com.nivenia.scheduled-restart.plist"
           cp scripts/setup.sh                             "$OUT_DIR/setup.sh"
           cp scripts/update.sh                            "$OUT_DIR/update.sh"
           cp scripts/nivenia_recovery.sh                  "$OUT_DIR/nivenia_recovery.sh"
           cp scripts/prepare_clean_capture.sh             "$OUT_DIR/prepare_clean_capture.sh"
-          cp scripts/nivenia_scheduled_restart.sh         "$OUT_DIR/nivenia_scheduled_restart.sh"
 
       - name: Create archive
         shell: bash
